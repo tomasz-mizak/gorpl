@@ -12,6 +12,14 @@ import (
 	"gorpl/internal/model"
 )
 
+// ProductRepository defines interface for product database operations
+type ProductRepository interface {
+	LoadFromFile(filename string) error
+	FindByGtin(gtin string) *model.ProductInfo
+	SearchByName(query string) []*model.ProductInfo
+	GetStatistics() map[string]interface{}
+}
+
 // ProductDatabase holds the database of medical products and provides methods to search it
 type ProductDatabase struct {
 	produkty *model.ProduktyLecznicze
@@ -19,6 +27,9 @@ type ProductDatabase struct {
 	gtinIndex map[string]*model.ProductInfo
 	mutex     sync.RWMutex
 }
+
+// Make sure ProductDatabase implements ProductRepository
+var _ ProductRepository = (*ProductDatabase)(nil)
 
 // NewProductDatabase creates a new product database
 func NewProductDatabase() *ProductDatabase {

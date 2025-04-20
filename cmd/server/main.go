@@ -2,273 +2,186 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
+	"gorpl/internal/api"
 	"gorpl/internal/database"
 )
 
+const (
+	// URL do pobierania pliku XML z rejestru produktów leczniczych
+	xmlURL = "https://rejestry.ezdrowie.gov.pl/api/rpl/medicinal-products/public-pl-report/6.0.0/overall.xml"
+	// Wersja API
+	apiVersion = "6.0.0"
+)
+
+// getDataFilePath zwraca ścieżkę do pliku danych na podstawie aktualnej daty
+func getDataFilePath() string {
+	currentDate := time.Now().Format("20060102")
+	return fmt.Sprintf("%s_%s.xml", currentDate, apiVersion)
+}
+
+// needsDownload sprawdza, czy plik XML powinien zostać pobrany
+// Plik jest pobierany, gdy nie istnieje lub pochodzi z wcześniejszego dnia
+func needsDownload(filePath string) bool {
+	// Sprawdź, czy plik istnieje
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		// Plik nie istnieje
+		return true
+	}
+	if err != nil {
+		// Inny błąd
+		log.Printf("Błąd podczas sprawdzania pliku: %v", err)
+		return true
+	}
+
+	// Pobierz datę z nazwy bieżącego pliku
+	expected := getDataFilePath()
+	return filepath.Base(filePath) != filepath.Base(expected)
+}
+
+// downloadXMLFile pobiera plik XML z rejestru produktów leczniczych
+func downloadXMLFile(url, filePath string) error {
+	// Utwórz katalog, jeśli nie istnieje
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("nie można utworzyć katalogu: %w", err)
+	}
+
+	// Pobierz plik
+	log.Printf("Pobieranie pliku z %s...", url)
+	startTime := time.Now()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("błąd podczas pobierania: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("nieprawidłowy status HTTP: %d", resp.StatusCode)
+	}
+
+	// Utwórz plik tymczasowy
+	tempFile := filePath + ".tmp"
+	out, err := os.Create(tempFile)
+	if err != nil {
+		return fmt.Errorf("nie można utworzyć pliku tymczasowego: %w", err)
+	}
+	defer out.Close()
+
+	// Kopiuj dane
+	n, err := io.Copy(out, resp.Body)
+	if err != nil {
+		os.Remove(tempFile) // Usuń plik tymczasowy w przypadku błędu
+		return fmt.Errorf("błąd podczas zapisywania danych: %w", err)
+	}
+
+	// Zamknij plik przed zmianą nazwy
+	out.Close()
+
+	// Zmień nazwę pliku tymczasowego na docelową
+	if err := os.Rename(tempFile, filePath); err != nil {
+		os.Remove(tempFile) // Usuń plik tymczasowy w przypadku błędu
+		return fmt.Errorf("nie można zmienić nazwy pliku: %w", err)
+	}
+
+	log.Printf("Pobrano %d bajtów w %v", n, time.Since(startTime))
+	return nil
+}
+
+// ensureDataFile zapewnia, że plik XML jest dostępny i aktualny
+func ensureDataFile(providedFile string) (string, error) {
+	// Jeśli plik został podany przez użytkownika, użyj go
+	if providedFile != "" && providedFile != getDataFilePath() {
+		if _, err := os.Stat(providedFile); err == nil {
+			log.Printf("Używam pliku podanego przez użytkownika: %s", providedFile)
+			return providedFile, nil
+		}
+		log.Printf("Podany plik nie istnieje: %s", providedFile)
+	}
+
+	// Użyj domyślnej ścieżki pliku
+	filePath := getDataFilePath()
+
+	// Sprawdź, czy plik wymaga pobrania
+	if needsDownload(filePath) {
+		log.Printf("Plik %s wymaga pobrania", filePath)
+		if err := downloadXMLFile(xmlURL, filePath); err != nil {
+			return "", fmt.Errorf("nie można pobrać pliku: %w", err)
+		}
+	} else {
+		log.Printf("Używam istniejącego pliku: %s", filePath)
+	}
+
+	return filePath, nil
+}
+
 func main() {
 	// Define command-line flags
-	xmlFile := flag.String("file", "20250419_6.0.0.xml", "Path to the XML file with medical products data")
-	port := flag.String("port", "8080", "Port to run the HTTP server on")
+	xmlFileFlag := flag.String("file", "", "Opcjonalna ścieżka do pliku XML z danymi produktów leczniczych")
+	port := flag.String("port", "1532", "Port to run the HTTP server on")
 	flag.Parse()
-	
+
+	// Zapewnij, że plik XML jest dostępny
+	xmlFile, err := ensureDataFile(*xmlFileFlag)
+	if err != nil {
+		log.Fatalf("Błąd przygotowania pliku danych: %v", err)
+	}
+
 	// Create a new product database
 	db := database.NewProductDatabase()
-	
+
 	// Start time for performance measurement
 	startTime := time.Now()
-	
-	// Check if the file exists
-	if _, err := os.Stat(*xmlFile); os.IsNotExist(err) {
-		log.Fatalf("Error: File %s does not exist", *xmlFile)
-	}
-	
+
 	// Load the products from the XML file
-	log.Printf("Loading products from %s...", *xmlFile)
-	if err := db.LoadFromFile(*xmlFile); err != nil {
-		log.Fatalf("Error loading products: %v", err)
+	log.Printf("Ładowanie produktów z %s...", xmlFile)
+	if err := db.LoadFromFile(xmlFile); err != nil {
+		log.Fatalf("Błąd podczas ładowania produktów: %v", err)
 	}
-	
+
 	// Get statistics to display product count
 	stats := db.GetStatistics()
-	log.Printf("Loaded %d products in %v", stats["liczbaProdukow"], time.Since(startTime))
-	
-	// Set up HTTP routes
-	http.HandleFunc("/api/product", func(w http.ResponseWriter, r *http.Request) {
-		handleProductByGtin(w, r, db)
+	log.Printf("Załadowano %d produktów w %v", stats["liczbaProdukow"], time.Since(startTime))
+
+	// Initialize Gin
+	router := gin.Default()
+
+	// No trust for proxies
+	router.SetTrustedProxies(nil)
+
+	// Load HTML templates
+	router.LoadHTMLGlob("templates/*")
+
+	// Serve static files if they exist
+	staticDir := "static"
+	if _, err := os.Stat(staticDir); !os.IsNotExist(err) {
+		router.Static("/static", staticDir)
+	}
+
+	// Create API handler and register routes
+	handler := api.NewHandler(db)
+	handler.RegisterRoutes(router)
+
+	// Home page route
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
 	})
-	
-	http.HandleFunc("/api/search", func(w http.ResponseWriter, r *http.Request) {
-		handleSearchByName(w, r, db)
-	})
-	
-	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
-		handleStats(w, r, db)
-	})
-	
-	// Simple home page
-	http.HandleFunc("/", handleHomePage)
-	
+
 	// Start the HTTP server
-	log.Printf("Starting HTTP server on port %s...", *port)
-	if err := http.ListenAndServe(":"+*port, nil); err != nil {
-		log.Fatalf("Error starting HTTP server: %v", err)
+	log.Printf("Uruchamianie serwera HTTP na porcie %s...", *port)
+	if err := router.Run(":" + *port); err != nil {
+		log.Fatalf("Błąd podczas uruchamiania serwera HTTP: %v", err)
 	}
-}
-
-// handleProductByGtin handles requests for product info by GTIN/EAN
-func handleProductByGtin(w http.ResponseWriter, r *http.Request, db *database.ProductDatabase) {
-	// Only allow GET requests
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	
-	// Get the GTIN from the URL query parameters
-	gtin := r.URL.Query().Get("gtin")
-	if gtin == "" {
-		http.Error(w, "Missing GTIN parameter", http.StatusBadRequest)
-		return
-	}
-	
-	// Find the product
-	productInfo := db.FindByGtin(gtin)
-	if productInfo == nil {
-		http.Error(w, "Product not found", http.StatusNotFound)
-		return
-	}
-	
-	// Set response headers
-	w.Header().Set("Content-Type", "application/json")
-	
-	// Encode the product info as JSON
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ") // Pretty print JSON
-	if err := encoder.Encode(productInfo); err != nil {
-		log.Printf("Error encoding response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleSearchByName handles search requests by product name
-func handleSearchByName(w http.ResponseWriter, r *http.Request, db *database.ProductDatabase) {
-	// Only allow GET requests
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	
-	// Get the query from the URL query parameters
-	query := r.URL.Query().Get("query")
-	if query == "" {
-		http.Error(w, "Missing query parameter", http.StatusBadRequest)
-		return
-	}
-	
-	// Search for products
-	results := db.SearchByName(query)
-	if len(results) == 0 {
-		// Return empty array instead of 404
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, "[]")
-		return
-	}
-	
-	// Set response headers
-	w.Header().Set("Content-Type", "application/json")
-	
-	// Encode the results as JSON
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ") // Pretty print JSON
-	if err := encoder.Encode(results); err != nil {
-		log.Printf("Error encoding response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleStats handles requests for database statistics
-func handleStats(w http.ResponseWriter, r *http.Request, db *database.ProductDatabase) {
-	// Only allow GET requests
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	
-	// Get statistics
-	stats := db.GetStatistics()
-	
-	// Set response headers
-	w.Header().Set("Content-Type", "application/json")
-	
-	// Encode the stats as JSON
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ") // Pretty print JSON
-	if err := encoder.Encode(stats); err != nil {
-		log.Printf("Error encoding response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleHomePage serves the home page HTML
-func handleHomePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Baza Produktów Leczniczych</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-        h1 { color: #333; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input[type="text"] { padding: 8px; width: 300px; }
-        button { padding: 8px 15px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-        pre { background: #f4f4f4; padding: 15px; overflow: auto; }
-        .tabs { display: flex; margin-bottom: 20px; }
-        .tab { padding: 10px 15px; cursor: pointer; background: #f1f1f1; margin-right: 5px; }
-        .tab.active { background: #4CAF50; color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-    </style>
-</head>
-<body>
-    <h1>Baza Produktów Leczniczych</h1>
-    
-    <div class="tabs">
-        <div class="tab active" onclick="showTab('search-gtin')">Wyszukaj po EAN/GTIN</div>
-        <div class="tab" onclick="showTab('search-name')">Wyszukaj po nazwie</div>
-    </div>
-    
-    <div id="search-gtin" class="tab-content active">
-        <div class="form-group">
-            <label for="gtin">Kod EAN/GTIN:</label>
-            <input type="text" id="gtin" placeholder="Wprowadź kod EAN/GTIN">
-            <button onclick="searchByGtin()">Szukaj</button>
-        </div>
-    </div>
-    
-    <div id="search-name" class="tab-content">
-        <div class="form-group">
-            <label for="product-name">Nazwa produktu:</label>
-            <input type="text" id="product-name" placeholder="Wprowadź nazwę produktu">
-            <button onclick="searchByName()">Szukaj</button>
-        </div>
-    </div>
-    
-    <div id="result">
-        <pre id="json-result"></pre>
-    </div>
-
-    <script>
-        function showTab(tabId) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Show selected tab
-            document.getElementById(tabId).classList.add('active');
-            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
-        }
-        
-        async function searchByGtin() {
-            const gtin = document.getElementById('gtin').value;
-            if (!gtin) {
-                alert('Wprowadź kod EAN/GTIN');
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/product?gtin=' + encodeURIComponent(gtin));
-                if (!response.ok) {
-                    throw new Error('Nie znaleziono produktu lub wystąpił błąd');
-                }
-                
-                const data = await response.json();
-                document.getElementById('json-result').textContent = JSON.stringify(data, null, 2);
-            } catch (error) {
-                document.getElementById('json-result').textContent = error.message;
-            }
-        }
-        
-        async function searchByName() {
-            const name = document.getElementById('product-name').value;
-            if (!name) {
-                alert('Wprowadź nazwę produktu');
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/search?query=' + encodeURIComponent(name));
-                if (!response.ok) {
-                    throw new Error('Wystąpił błąd podczas wyszukiwania');
-                }
-                
-                const data = await response.json();
-                if (data.length === 0) {
-                    document.getElementById('json-result').textContent = 'Nie znaleziono produktów pasujących do zapytania';
-                } else {
-                    document.getElementById('json-result').textContent = JSON.stringify(data, null, 2);
-                }
-            } catch (error) {
-                document.getElementById('json-result').textContent = error.message;
-            }
-        }
-    </script>
-</body>
-</html>
-	`)
 }

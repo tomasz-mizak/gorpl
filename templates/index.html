@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Baza Produktów Leczniczych</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 40px; 
+            line-height: 1.6; 
+            color: #333;
+        }
+        h1 { 
+            color: #2c3e50; 
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: bold;
+        }
+        input[type="text"] { 
+            padding: 10px; 
+            width: 300px; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button { 
+            padding: 10px 15px; 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        pre { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            overflow: auto;
+            border-radius: 4px; 
+        }
+        .tabs { 
+            display: flex; 
+            margin-bottom: 20px; 
+            border-bottom: 1px solid #ddd;
+        }
+        .tab { 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            margin-right: 5px; 
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active { 
+            background: #3498db; 
+            color: white; 
+        }
+        .tab-content { 
+            display: none; 
+        }
+        .tab-content.active { 
+            display: block; 
+        }
+        .json-key {
+            color: #881391;
+        }
+        .json-string {
+            color: #108000;
+        }
+        .json-number {
+            color: #1a01cc;
+        }
+        .json-boolean {
+            color: #1a01cc;
+        }
+        .json-null {
+            color: #808080;
+        }
+        .format-tabs {
+            display: flex;
+            margin: 10px 0 20px 0;
+        }
+        .format-tab {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        .format-tab.active {
+            background: #f1f1f1;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Baza Produktów Leczniczych</h1>
+        
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('search-gtin')">Wyszukaj po EAN/GTIN</div>
+                <div class="tab" onclick="showTab('search-name')">Wyszukaj po nazwie</div>
+                <div class="tab" onclick="showTab('search-unitbox')">UnitBox API</div>
+            </div>
+            
+            <div id="search-gtin" class="tab-content active">
+                <div class="form-group">
+                    <label for="gtin">Kod EAN/GTIN:</label>
+                    <input type="text" id="gtin" placeholder="Wprowadź kod EAN/GTIN">
+                    <button onclick="searchByGtin()">Szukaj</button>
+                </div>
+            </div>
+            
+            <div id="search-name" class="tab-content">
+                <div class="form-group">
+                    <label for="product-name">Nazwa produktu:</label>
+                    <input type="text" id="product-name" placeholder="Wprowadź nazwę produktu">
+                    <button onclick="searchByName()">Szukaj</button>
+                </div>
+            </div>
+            
+            <div id="search-unitbox" class="tab-content">
+                <div class="format-tabs">
+                    <div class="format-tab active" onclick="showFormatTab('unitbox-gtin')">Wyszukaj po EAN/GTIN</div>
+                    <div class="format-tab" onclick="showFormatTab('unitbox-name')">Wyszukaj po nazwie</div>
+                </div>
+                
+                <div id="unitbox-gtin" class="format-content">
+                    <div class="form-group">
+                        <label for="unitbox-gtin-input">Kod EAN/GTIN:</label>
+                        <input type="text" id="unitbox-gtin-input" placeholder="Wprowadź kod EAN/GTIN">
+                        <button onclick="searchUnitboxByGtin()">Szukaj</button>
+                    </div>
+                </div>
+                
+                <div id="unitbox-name" class="format-content" style="display: none;">
+                    <div class="form-group">
+                        <label for="unitbox-name-input">Nazwa produktu:</label>
+                        <input type="text" id="unitbox-name-input" placeholder="Wprowadź nazwę produktu">
+                        <button onclick="searchUnitboxByName()">Szukaj</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="result" class="card" style="display: none;">
+            <h2>Wyniki wyszukiwania</h2>
+            <pre id="json-result"></pre>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+        }
+        
+        function showFormatTab(formatTabId) {
+            // Hide all format tabs
+            document.querySelectorAll('.format-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            document.querySelectorAll('.format-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected format tab
+            document.getElementById(formatTabId).style.display = 'block';
+            document.querySelector(`.format-tab[onclick="showFormatTab('${formatTabId}')"]`).classList.add('active');
+        }
+        
+        async function searchByGtin() {
+            const gtin = document.getElementById('gtin').value;
+            if (!gtin) {
+                alert('Wprowadź kod EAN/GTIN');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/product?gtin=' + encodeURIComponent(gtin));
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Nie znaleziono produktu lub wystąpił błąd');
+                }
+                
+                displayResult(data);
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        async function searchByName() {
+            const name = document.getElementById('product-name').value;
+            if (!name) {
+                alert('Wprowadź nazwę produktu');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/search?query=' + encodeURIComponent(name));
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Wystąpił błąd podczas wyszukiwania');
+                }
+                
+                if (Array.isArray(data) && data.length === 0) {
+                    displayError('Nie znaleziono produktów pasujących do zapytania');
+                } else {
+                    displayResult(data);
+                }
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        async function searchUnitboxByGtin() {
+            const gtin = document.getElementById('unitbox-gtin-input').value;
+            if (!gtin) {
+                alert('Wprowadź kod EAN/GTIN');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/unitbox/product?gtin=' + encodeURIComponent(gtin));
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Nie znaleziono produktu lub wystąpił błąd');
+                }
+                
+                displayResult(data);
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        async function searchUnitboxByName() {
+            const name = document.getElementById('unitbox-name-input').value;
+            if (!name) {
+                alert('Wprowadź nazwę produktu');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/unitbox/search?query=' + encodeURIComponent(name));
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Wystąpił błąd podczas wyszukiwania');
+                }
+                
+                if (Array.isArray(data) && data.length === 0) {
+                    displayError('Nie znaleziono produktów pasujących do zapytania');
+                } else {
+                    displayResult(data);
+                }
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        function displayResult(data) {
+            const resultDiv = document.getElementById('result');
+            const jsonResult = document.getElementById('json-result');
+            
+            // Format JSON with syntax highlighting
+            jsonResult.innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+            resultDiv.style.display = 'block';
+        }
+        
+        function displayError(message) {
+            const resultDiv = document.getElementById('result');
+            const jsonResult = document.getElementById('json-result');
+            
+            jsonResult.textContent = message;
+            resultDiv.style.display = 'block';
+        }
+        
+        // Function for JSON syntax highlighting
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                var cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+    </script>
+</body>
+</html>
