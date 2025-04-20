@@ -73,3 +73,41 @@ The application can be easily deployed using Docker. The following files are pro
 - Data is persisted in the `./data` directory
 - Timezone is set to Europe/Warsaw
 - Automatic restart is enabled
+
+### Publishing Docker Image
+
+To publish the Docker image to a registry (e.g., Docker Hub, GitHub Container Registry), follow these steps:
+
+1. Build the image with a tag:
+   ```bash
+   docker build -t yourusername/gorpl:latest .
+   ```
+
+2. Log in to your registry:
+   ```bash
+   docker login
+   ```
+
+3. Push the image:
+   ```bash
+   docker push yourusername/gorpl:latest
+   ```
+
+#### Using GitHub Container Registry (GHCR)
+
+1. Log in to GHCR:
+   ```bash
+   echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+   ```
+
+2. Build and tag the image:
+   ```bash
+   docker build -t ghcr.io/yourusername/gorpl:latest .
+   ```
+
+3. Push the image:
+   ```bash
+   docker push ghcr.io/yourusername/gorpl:latest
+   ```
+
+Note: Replace `yourusername` with your actual username and ensure you have the necessary permissions to push to the registry.
