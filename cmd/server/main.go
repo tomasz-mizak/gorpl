@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -44,6 +45,32 @@ func needsDownload(filePath string) bool {
 
 	expected := getDataFilePath()
 	return filepath.Base(filePath) != filepath.Base(expected)
+}
+
+// cleanupAllFiles removes all XML files from the data directory except the current day's file
+func cleanupAllFiles(dataDir string) error {
+	files, err := os.ReadDir(dataDir)
+	if err != nil {
+		return fmt.Errorf("error reading data directory: %w", err)
+	}
+
+	currentFile := getDataFilePath()
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".xml") {
+			// Skip the current day's file
+			if filepath.Base(file.Name()) == filepath.Base(currentFile) {
+				continue
+			}
+			
+			filePath := filepath.Join(dataDir, file.Name())
+			if err := os.Remove(filePath); err != nil {
+				log.Printf("Error deleting file %s: %v", filePath, err)
+			} else {
+				log.Printf("Deleted file: %s", filePath)
+			}
+		}
+	}
+	return nil
 }
 
 // downloadXMLFile downloads the XML file from the medicinal products registry
@@ -87,6 +114,12 @@ func downloadXMLFile(url, filePath string) error {
 	}
 
 	log.Printf("Downloaded %d bytes in %v", n, time.Since(startTime))
+
+	// Clean up old files only after successful download
+	if err := cleanupAllFiles(dir); err != nil {
+		log.Printf("Warning: error during cleanup: %v", err)
+	}
+
 	return nil
 }
 
