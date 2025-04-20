@@ -37,3 +37,39 @@ https://rejestry.ezdrowie.gov.pl/api/rpl/medicinal-products/public-pl-report/6.0
 ## API Integration
 
 A special API interface is available for Unitbox integration. Please refer to the API documentation for details.
+
+## Docker Deployment
+
+The application can be easily deployed using Docker. The following files are provided:
+
+- `Dockerfile` - Multi-stage build configuration
+- `docker-compose.yml` - Docker Compose configuration
+- `.dockerignore` - Excludes unnecessary files from the build
+
+### Quick Start
+
+1. Build and start the container:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. Access the application at `http://localhost:1532`
+
+### Docker Compose Commands
+
+- Start in detached mode:
+  ```bash
+  docker-compose up -d --build
+  ```
+
+- Stop the container:
+  ```bash
+  docker-compose down
+  ```
+
+### Configuration
+
+- The application runs on port 1532
+- Data is persisted in the `./data` directory
+- Timezone is set to Europe/Warsaw
+- Automatic restart is enabled

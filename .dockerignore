@@ -1,0 +1,6 @@
+.git
+.gitignore
+*.xml
+data/
+README.md
+docs/ 
