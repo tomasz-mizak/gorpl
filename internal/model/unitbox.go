@@ -2,7 +2,8 @@
 package model
 
 import (
-	"fmt"
+	"log"
+	"strconv"
 	"strings"
 )
 
@@ -39,13 +40,29 @@ func ConvertToMedicationTypeRplDto(product *ProductInfo) *MedicationTypeRplDto {
 	if product.Package.JednostkiOpakowania != nil && len(product.Package.JednostkiOpakowania.JednostkaOpakowania) > 0 {
 		unit := product.Package.JednostkiOpakowania.JednostkaOpakowania[0]
 
-		// Try to convert amount to int
-		if unit.LiczbaOpakowan != "" {
-			fmt.Sscanf(string(unit.LiczbaOpakowan), "%d", &amount)
+		// Kluczowa zmiana: odczytujemy ilość z pola Pojemnosc, a nie LiczbaOpakowan
+		if unit.Pojemnosc != "" {
+			pojemnoscStr := unit.Pojemnosc
+			// Usuwamy wszelkie niedigitowe znaki dla bezpieczeństwa
+			pojemnoscDigits := strings.TrimFunc(pojemnoscStr, func(r rune) bool {
+				return r < '0' || r > '9'
+			})
+
+			if pojemnoscDigits != "" {
+				parsedAmount, err := strconv.Atoi(pojemnoscDigits)
+				if err == nil && parsedAmount > 0 {
+					amount = parsedAmount
+				} else {
+					// Log error but continue with default value
+					log.Printf("Failed to parse Pojemnosc (%s): %v", pojemnoscStr, err)
+				}
+			}
 		}
 
-		// Get amount unit (if available)
-		amountUnit = string(unit.JednostkaPojemnosci)
+		// Get amount unit from JednostkaPojemnosci
+		if unit.JednostkaPojemnosci != "" {
+			amountUnit = string(unit.JednostkaPojemnosci)
+		}
 	}
 
 	// Extract manufacturer name
