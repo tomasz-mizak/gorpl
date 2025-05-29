@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -17,7 +18,9 @@ type ProductRepository interface {
 	LoadFromFile(filename string) error
 	FindByGtin(gtin string) *model.ProductInfo
 	SearchByName(query string) []*model.ProductInfo
+	SearchByGtin(gtin string) []*model.ProductInfo
 	GetStatistics() map[string]interface{}
+	GetAllProducts() []*model.ProductInfo
 }
 
 // ProductDatabase holds the database of medical products and provides methods to search it
@@ -174,5 +177,124 @@ func (db *ProductDatabase) SearchByName(query string) []*model.ProductInfo {
 // containsIgnoreCase checks if a string contains another string (case-insensitive)
 func containsIgnoreCase(s, substr string) bool {
 	s, substr = strings.ToLower(s), strings.ToLower(substr)
+
+	// Split both strings into words
+	sWords := strings.Fields(s)
+	substrWords := strings.Fields(substr)
+
+	// If substr is a single word
+	if len(substrWords) == 1 {
+		// If the string is a number (like EAN code), use simple contains
+		if _, err := strconv.Atoi(substr); err == nil {
+			return strings.Contains(s, substr)
+		}
+
+		// For text, check if it's a prefix of any word
+		for _, word := range sWords {
+			if strings.HasPrefix(word, substr) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// For multi-word searches, check if all words are present in order
 	return strings.Contains(s, substr)
+}
+
+// GetAllProducts returns all products from the database
+func (db *ProductDatabase) GetAllProducts() []*model.ProductInfo {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	var results []*model.ProductInfo
+	seenProducts := make(map[model.BigIntAsString]bool)
+
+	for i := range db.produkty.ProduktyLecznicze {
+		product := &db.produkty.ProduktyLecznicze[i]
+
+		if seenProducts[product.ID] {
+			continue
+		}
+
+		seenProducts[product.ID] = true
+
+		if product.Opakowania != nil {
+			for j := range product.Opakowania.Opakowanie {
+				pkg := &product.Opakowania.Opakowanie[j]
+
+				if pkg.Skasowane != "TAK" {
+					results = append(results, &model.ProductInfo{
+						Product: product,
+						Package: pkg,
+					})
+					break
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// SearchByGtin searches for products by GTIN/EAN code (partial match)
+func (db *ProductDatabase) SearchByGtin(gtin string) []*model.ProductInfo {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	if gtin == "" {
+		return nil
+	}
+
+	var results []*model.ProductInfo
+	seenProducts := make(map[model.BigIntAsString]bool)
+
+	// Search through all products
+	for i := range db.produkty.ProduktyLecznicze {
+		product := &db.produkty.ProduktyLecznicze[i]
+
+		if seenProducts[product.ID] {
+			continue
+		}
+
+		if product.Opakowania != nil {
+			for j := range product.Opakowania.Opakowanie {
+				pkg := &product.Opakowania.Opakowanie[j]
+
+				if pkg.Skasowane == "TAK" {
+					continue
+				}
+
+				// Check main GTIN
+				if pkg.KodGTIN != "" && containsIgnoreCase(string(pkg.KodGTIN), gtin) {
+					seenProducts[product.ID] = true
+					results = append(results, &model.ProductInfo{
+						Product: product,
+						Package: pkg,
+					})
+					break
+				}
+
+				// Check foreign GTINs
+				if pkg.ZgodyPrezesa != nil {
+					for _, zgoda := range pkg.ZgodyPrezesa.ZgodaPrezesa {
+						if zgoda.GTINZagraniczne != nil {
+							for _, foreignGtin := range zgoda.GTINZagraniczne.GTINZagraniczny {
+								if foreignGtin.Numer != "" && containsIgnoreCase(foreignGtin.Numer, gtin) {
+									seenProducts[product.ID] = true
+									results = append(results, &model.ProductInfo{
+										Product: product,
+										Package: pkg,
+									})
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return results
 }

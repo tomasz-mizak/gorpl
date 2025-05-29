@@ -127,3 +127,9 @@ func parseStrengthUnit(combined string) (string, string) {
 
 	return strings.TrimSpace(strength), strings.TrimSpace(unit)
 }
+
+// SimplifiedMedicationDto represents a simplified medication format
+type SimplifiedMedicationDto struct {
+	TradeName string `json:"trade_name"`
+	EanCode   string `json:"ean_code"`
+}

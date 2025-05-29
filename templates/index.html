@@ -119,6 +119,7 @@
                 <div class="tab active" onclick="showTab('search-gtin')">Wyszukaj po EAN/GTIN</div>
                 <div class="tab" onclick="showTab('search-name')">Wyszukaj po nazwie</div>
                 <div class="tab" onclick="showTab('search-unitbox')">UnitBox API</div>
+                <div class="tab" onclick="showTab('simplified-tab')">Uproszczony format</div>
             </div>
             
             <div id="search-gtin" class="tab-content active">
@@ -157,6 +158,14 @@
                         <input type="text" id="unitbox-name-input" placeholder="Wprowadź nazwę produktu">
                         <button onclick="searchUnitboxByName()">Szukaj</button>
                     </div>
+                </div>
+            </div>
+            
+            <div id="simplified-tab" class="tab-content">
+                <div class="search-container">
+                    <input type="text" id="simplified-name-input" placeholder="Wprowadź nazwę leku lub kod EAN">
+                    <button onclick="searchSimplifiedByName()">Szukaj</button>
+                    <button onclick="getAllSimplifiedMedications()" style="margin-left: 10px;">Pobierz wszystkie leki</button>
                 </div>
             </div>
         </div>
@@ -280,6 +289,50 @@
                 
                 if (Array.isArray(data) && data.length === 0) {
                     displayError('Nie znaleziono produktów pasujących do zapytania');
+                } else {
+                    displayResult(data);
+                }
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        async function searchSimplifiedByName() {
+            const name = document.getElementById('simplified-name-input').value;
+            if (!name) {
+                alert('Wprowadź nazwę produktu');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/unitbox/simplified?query=' + encodeURIComponent(name));
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Wystąpił błąd podczas wyszukiwania');
+                }
+                
+                if (Array.isArray(data) && data.length === 0) {
+                    displayError('Nie znaleziono produktów pasujących do zapytania');
+                } else {
+                    displayResult(data);
+                }
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        async function getAllSimplifiedMedications() {
+            try {
+                const response = await fetch('/api/v1/unitbox/simplified/all');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Wystąpił błąd podczas pobierania danych');
+                }
+                
+                if (Array.isArray(data) && data.length === 0) {
+                    displayError('Nie znaleziono żadnych leków w bazie');
                 } else {
                     displayResult(data);
                 }
