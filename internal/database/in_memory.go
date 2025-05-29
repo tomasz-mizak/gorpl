@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -181,8 +182,14 @@ func containsIgnoreCase(s, substr string) bool {
 	sWords := strings.Fields(s)
 	substrWords := strings.Fields(substr)
 
-	// If substr is a single word, check if it's a prefix of any word in s
+	// If substr is a single word
 	if len(substrWords) == 1 {
+		// If the string is a number (like EAN code), use simple contains
+		if _, err := strconv.Atoi(substr); err == nil {
+			return strings.Contains(s, substr)
+		}
+
+		// For text, check if it's a prefix of any word
 		for _, word := range sWords {
 			if strings.HasPrefix(word, substr) {
 				return true
