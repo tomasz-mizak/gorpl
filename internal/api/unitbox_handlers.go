@@ -64,12 +64,38 @@ func (h *Handler) GetSimplifiedMedications(c *gin.Context) {
 		return
 	}
 
-	// Search for products
-	results := h.DB.SearchByName(query)
+	// Search for products by name
+	resultsByName := h.DB.SearchByName(query)
+
+	// Search for products by GTIN
+	resultsByGtin := []*model.ProductInfo{}
+	if product := h.DB.FindByGtin(query); product != nil {
+		resultsByGtin = append(resultsByGtin, product)
+	}
+
+	// Combine and deduplicate results
+	seenProducts := make(map[model.BigIntAsString]bool)
+	var allResults []*model.ProductInfo
+
+	// Add results from name search
+	for _, product := range resultsByName {
+		if !seenProducts[product.Product.ID] {
+			seenProducts[product.Product.ID] = true
+			allResults = append(allResults, product)
+		}
+	}
+
+	// Add results from GTIN search
+	for _, product := range resultsByGtin {
+		if !seenProducts[product.Product.ID] {
+			seenProducts[product.Product.ID] = true
+			allResults = append(allResults, product)
+		}
+	}
 
 	// Convert results to simplified format
 	var simplifiedResults []model.SimplifiedMedicationDto
-	for _, product := range results {
+	for _, product := range allResults {
 		if product.Product != nil && product.Package != nil && product.Package.KodGTIN != "" {
 			simplifiedResults = append(simplifiedResults, model.SimplifiedMedicationDto{
 				TradeName: string(product.Product.NazwaProduktu),
