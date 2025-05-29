@@ -18,6 +18,7 @@ type ProductRepository interface {
 	FindByGtin(gtin string) *model.ProductInfo
 	SearchByName(query string) []*model.ProductInfo
 	GetStatistics() map[string]interface{}
+	GetAllProducts() []*model.ProductInfo
 }
 
 // ProductDatabase holds the database of medical products and provides methods to search it
@@ -175,4 +176,39 @@ func (db *ProductDatabase) SearchByName(query string) []*model.ProductInfo {
 func containsIgnoreCase(s, substr string) bool {
 	s, substr = strings.ToLower(s), strings.ToLower(substr)
 	return strings.Contains(s, substr)
+}
+
+// GetAllProducts returns all products from the database
+func (db *ProductDatabase) GetAllProducts() []*model.ProductInfo {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	var results []*model.ProductInfo
+	seenProducts := make(map[model.BigIntAsString]bool)
+
+	for i := range db.produkty.ProduktyLecznicze {
+		product := &db.produkty.ProduktyLecznicze[i]
+
+		if seenProducts[product.ID] {
+			continue
+		}
+
+		seenProducts[product.ID] = true
+
+		if product.Opakowania != nil {
+			for j := range product.Opakowania.Opakowanie {
+				pkg := &product.Opakowania.Opakowanie[j]
+
+				if pkg.Skasowane != "TAK" {
+					results = append(results, &model.ProductInfo{
+						Product: product,
+						Package: pkg,
+					})
+					break
+				}
+			}
+		}
+	}
+
+	return results
 }
