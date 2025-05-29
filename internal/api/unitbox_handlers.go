@@ -68,10 +68,7 @@ func (h *Handler) GetSimplifiedMedications(c *gin.Context) {
 	resultsByName := h.DB.SearchByName(query)
 
 	// Search for products by GTIN
-	resultsByGtin := []*model.ProductInfo{}
-	if product := h.DB.FindByGtin(query); product != nil {
-		resultsByGtin = append(resultsByGtin, product)
-	}
+	resultsByGtin := h.DB.SearchByGtin(query)
 
 	// Combine and deduplicate results
 	seenProducts := make(map[model.BigIntAsString]bool)

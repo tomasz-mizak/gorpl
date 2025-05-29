@@ -17,6 +17,7 @@ type ProductRepository interface {
 	LoadFromFile(filename string) error
 	FindByGtin(gtin string) *model.ProductInfo
 	SearchByName(query string) []*model.ProductInfo
+	SearchByGtin(gtin string) []*model.ProductInfo
 	GetStatistics() map[string]interface{}
 	GetAllProducts() []*model.ProductInfo
 }
@@ -205,6 +206,68 @@ func (db *ProductDatabase) GetAllProducts() []*model.ProductInfo {
 						Package: pkg,
 					})
 					break
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// SearchByGtin searches for products by GTIN/EAN code (partial match)
+func (db *ProductDatabase) SearchByGtin(gtin string) []*model.ProductInfo {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	if gtin == "" {
+		return nil
+	}
+
+	var results []*model.ProductInfo
+	seenProducts := make(map[model.BigIntAsString]bool)
+
+	// Search through all products
+	for i := range db.produkty.ProduktyLecznicze {
+		product := &db.produkty.ProduktyLecznicze[i]
+
+		if seenProducts[product.ID] {
+			continue
+		}
+
+		if product.Opakowania != nil {
+			for j := range product.Opakowania.Opakowanie {
+				pkg := &product.Opakowania.Opakowanie[j]
+
+				if pkg.Skasowane == "TAK" {
+					continue
+				}
+
+				// Check main GTIN
+				if pkg.KodGTIN != "" && containsIgnoreCase(string(pkg.KodGTIN), gtin) {
+					seenProducts[product.ID] = true
+					results = append(results, &model.ProductInfo{
+						Product: product,
+						Package: pkg,
+					})
+					break
+				}
+
+				// Check foreign GTINs
+				if pkg.ZgodyPrezesa != nil {
+					for _, zgoda := range pkg.ZgodyPrezesa.ZgodaPrezesa {
+						if zgoda.GTINZagraniczne != nil {
+							for _, foreignGtin := range zgoda.GTINZagraniczne.GTINZagraniczny {
+								if foreignGtin.Numer != "" && containsIgnoreCase(foreignGtin.Numer, gtin) {
+									seenProducts[product.ID] = true
+									results = append(results, &model.ProductInfo{
+										Product: product,
+										Package: pkg,
+									})
+									break
+								}
+							}
+						}
+					}
 				}
 			}
 		}
