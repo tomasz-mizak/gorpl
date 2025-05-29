@@ -181,10 +181,10 @@ func containsIgnoreCase(s, substr string) bool {
 	sWords := strings.Fields(s)
 	substrWords := strings.Fields(substr)
 
-	// If substr is a single word, check if it's a complete word in s
+	// If substr is a single word, check if it's a prefix of any word in s
 	if len(substrWords) == 1 {
 		for _, word := range sWords {
-			if word == substr {
+			if strings.HasPrefix(word, substr) {
 				return true
 			}
 		}
