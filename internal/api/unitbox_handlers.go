@@ -78,11 +78,7 @@ func (h *Handler) GetSimplifiedMedications(c *gin.Context) {
 		}
 	}
 
-	response := model.SimplifiedMedicationResponse{
-		Medications: simplifiedResults,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, simplifiedResults)
 }
 
 // GetAllSimplifiedMedications handles requests for all medications in simplified format
@@ -101,11 +97,7 @@ func (h *Handler) GetAllSimplifiedMedications(c *gin.Context) {
 		}
 	}
 
-	response := model.SimplifiedMedicationResponse{
-		Medications: simplifiedResults,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, simplifiedResults)
 }
 
 // RegisterUnitboxRoutes registers all Unitbox API routes

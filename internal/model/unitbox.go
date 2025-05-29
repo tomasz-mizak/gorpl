@@ -133,8 +133,3 @@ type SimplifiedMedicationDto struct {
 	TradeName string `json:"trade_name"`
 	EanCode   string `json:"ean_code"`
 }
-
-// SimplifiedMedicationResponse represents the response format for simplified medication list
-type SimplifiedMedicationResponse struct {
-	Medications []SimplifiedMedicationDto `json:"medications"`
-}
