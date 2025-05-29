@@ -176,6 +176,22 @@ func (db *ProductDatabase) SearchByName(query string) []*model.ProductInfo {
 // containsIgnoreCase checks if a string contains another string (case-insensitive)
 func containsIgnoreCase(s, substr string) bool {
 	s, substr = strings.ToLower(s), strings.ToLower(substr)
+
+	// Split both strings into words
+	sWords := strings.Fields(s)
+	substrWords := strings.Fields(substr)
+
+	// If substr is a single word, check if it's a complete word in s
+	if len(substrWords) == 1 {
+		for _, word := range sWords {
+			if word == substr {
+				return true
+			}
+		}
+		return false
+	}
+
+	// For multi-word searches, check if all words are present in order
 	return strings.Contains(s, substr)
 }
 
