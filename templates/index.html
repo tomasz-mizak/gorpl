@@ -312,7 +312,7 @@
                     throw new Error(data.error || 'Wystąpił błąd podczas wyszukiwania');
                 }
                 
-                if (data.matched_medications && data.matched_medications.length === 0) {
+                if (data.medications && data.medications.length === 0) {
                     displayError('Nie znaleziono produktów pasujących do zapytania');
                 } else {
                     displayResult(data);
@@ -331,7 +331,7 @@
                     throw new Error(data.error || 'Wystąpił błąd podczas pobierania danych');
                 }
                 
-                if (data.matched_medications && data.matched_medications.length === 0) {
+                if (data.medications && data.medications.length === 0) {
                     displayError('Nie znaleziono żadnych leków w bazie');
                 } else {
                     displayResult(data);

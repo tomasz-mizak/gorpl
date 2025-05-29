@@ -136,5 +136,5 @@ type SimplifiedMedicationDto struct {
 
 // SimplifiedMedicationResponse represents the response format for simplified medication list
 type SimplifiedMedicationResponse struct {
-	MatchedMedications []SimplifiedMedicationDto `json:"matched_medications"`
+	Medications []SimplifiedMedicationDto `json:"medications"`
 }

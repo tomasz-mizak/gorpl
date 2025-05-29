@@ -70,7 +70,7 @@ func (h *Handler) GetSimplifiedMedications(c *gin.Context) {
 	// Convert results to simplified format
 	var simplifiedResults []model.SimplifiedMedicationDto
 	for _, product := range results {
-		if product.Product != nil && product.Package != nil {
+		if product.Product != nil && product.Package != nil && product.Package.KodGTIN != "" {
 			simplifiedResults = append(simplifiedResults, model.SimplifiedMedicationDto{
 				TradeName: string(product.Product.NazwaProduktu),
 				EanCode:   string(product.Package.KodGTIN),
@@ -79,7 +79,7 @@ func (h *Handler) GetSimplifiedMedications(c *gin.Context) {
 	}
 
 	response := model.SimplifiedMedicationResponse{
-		MatchedMedications: simplifiedResults,
+		Medications: simplifiedResults,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -93,7 +93,7 @@ func (h *Handler) GetAllSimplifiedMedications(c *gin.Context) {
 	// Convert results to simplified format
 	var simplifiedResults []model.SimplifiedMedicationDto
 	for _, product := range results {
-		if product.Product != nil && product.Package != nil {
+		if product.Product != nil && product.Package != nil && product.Package.KodGTIN != "" {
 			simplifiedResults = append(simplifiedResults, model.SimplifiedMedicationDto{
 				TradeName: string(product.Product.NazwaProduktu),
 				EanCode:   string(product.Package.KodGTIN),
@@ -102,7 +102,7 @@ func (h *Handler) GetAllSimplifiedMedications(c *gin.Context) {
 	}
 
 	response := model.SimplifiedMedicationResponse{
-		MatchedMedications: simplifiedResults,
+		Medications: simplifiedResults,
 	}
 
 	c.JSON(http.StatusOK, response)
